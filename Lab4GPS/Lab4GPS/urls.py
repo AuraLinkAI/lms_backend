@@ -11,7 +11,11 @@ urlpatterns = [
     path('auth/', include('Auths.urls')),
 
     # Archive app URLs
-    path('archive/', include('Archive.urls')),  # Added Archive app routes
+    path('archive/', include('Archive.urls')),  
+
+    #courses app URLS
+    path('courses/', include('courses.urls')), 
+
 ]
 
 # Serve media files during development
