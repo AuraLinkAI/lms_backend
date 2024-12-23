@@ -1,19 +1,18 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Course, Module, ModuleContent, Assignment, AssignmentSubmission
+from .models import Course, Module, ModuleContent, Assignment, AssignmentSubmission, Enrollment
 from .serializers import (
     CourseSerializer, ModuleSerializer, ModuleContentSerializer,
-    AssignmentSerializer, AssignmentSubmissionSerializer
+    AssignmentSerializer, AssignmentSubmissionSerializer, EnrollmentSerializer
 )
 from .permissions import IsInstructor, IsStudent, IsAdmin
-
 
 class CourseViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing courses with custom actions for instructors and students.
     """
-    queryset = Course.objects.all().select_related('instructor').prefetch_related('modules__contents', 'modules__assignments')
+    queryset = Course.objects.all().select_related('instructor').prefetch_related('modules', 'modules__contents', 'modules__assignments')
     serializer_class = CourseSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -23,7 +22,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         """
         serializer.save(instructor=self.request.user)
 
-    @action(detail=False, methods=['get'], url_path='my-courses', permission_classes=[IsInstructor])
+    @action(detail=False, methods=['get'], permission_classes=[IsInstructor])
     def my_courses(self, request):
         """
         Custom action for instructors to view their courses.
@@ -32,7 +31,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(courses, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='in-progress', permission_classes=[IsStudent])
+    @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def in_progress_courses(self, request):
         """
         Custom action for students to view courses with pending assignments.
@@ -44,7 +43,7 @@ class CourseViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(courses, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'], url_path='completed', permission_classes=[IsStudent])
+    @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def completed_courses(self, request):
         """
         Custom action for students to view courses with completed assignments.
@@ -55,7 +54,6 @@ class CourseViewSet(viewsets.ModelViewSet):
         ).distinct()
         serializer = self.get_serializer(courses, many=True)
         return Response(serializer.data)
-
 
 class ModuleViewSet(viewsets.ModelViewSet):
     """
@@ -69,8 +67,7 @@ class ModuleViewSet(viewsets.ModelViewSet):
         """
         Ensure the module is associated with an existing course.
         """
-        serializer.save()
-
+        serializer.save(course_id=self.kwargs['course_pk'])
 
 class ModuleContentViewSet(viewsets.ModelViewSet):
     """
@@ -84,8 +81,7 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         """
         Add content to a specific module.
         """
-        serializer.save()
-
+        serializer.save(module_id=self.kwargs['module_pk'])
 
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
@@ -99,8 +95,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         """
         Add assignments to a module.
         """
-        serializer.save()
-
+        serializer.save(module_id=self.kwargs['module_pk'])
 
 class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
     """
@@ -108,15 +103,15 @@ class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
     """
     queryset = AssignmentSubmission.objects.all().select_related('assignment', 'student')
     serializer_class = AssignmentSubmissionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsStudent]
 
     def perform_create(self, serializer):
         """
         Allow students to submit their assignments.
         """
-        serializer.save(student=self.request.user)
+        serializer.save(student=self.request.user, assignment_id=self.kwargs['assignment_pk'])
 
-    @action(detail=False, methods=['get'], url_path='my-submissions', permission_classes=[IsStudent])
+    @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def my_submissions(self, request):
         """
         Custom action for students to view their submissions.
@@ -124,3 +119,17 @@ class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
         submissions = self.queryset.filter(student=request.user)
         serializer = self.get_serializer(submissions, many=True)
         return Response(serializer.data)
+
+class EnrollmentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing enrollments.
+    """
+    queryset = Enrollment.objects.all()
+    serializer_class = EnrollmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        """
+        Create an enrollment for the user.
+        """
+        serializer.save(user=self.request.user)

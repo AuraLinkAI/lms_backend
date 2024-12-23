@@ -138,6 +138,7 @@ class UserProfileView(generics.RetrieveAPIView):
     def get_object(self):
         return self.request.user
 
+
 class UpdateProfileView(generics.UpdateAPIView):
     """
     API endpoint to update user profile details.

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Course, Module, ModuleContent, Assignment, AssignmentSubmission
+from .models import Course, Module, ModuleContent, Assignment, AssignmentSubmission, Enrollment
 
 
 class ModuleContentSerializer(serializers.ModelSerializer):
@@ -36,3 +36,14 @@ class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssignmentSubmission
         fields = ['id', 'assignment', 'student', 'file', 'text', 'submitted_at', 'grade']
+
+
+class EnrollmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Enrollment
+        fields = ['id', 'course', 'user', 'enrolled_at', 'status']
+        read_only_fields = ['user', 'enrolled_at']  # status should be writable if it needs to be set during POST
+
+    def create(self, validated_data):
+        # Custom creation logic here, if needed
+        return super().create(validated_data)
