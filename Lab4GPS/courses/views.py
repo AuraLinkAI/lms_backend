@@ -9,27 +9,29 @@ from .serializers import (
 from .permissions import IsInstructor, IsStudent, IsAdmin
 
 class CourseViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing courses with custom actions for instructors and students.
-    """
-    queryset = Course.objects.all().select_related('instructor').prefetch_related('modules', 'modules__contents', 'modules__assignments')
+    queryset = Course.objects.prefetch_related('modules').select_related('instructor')
     serializer_class = CourseSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsInstructor()]
+        elif self.action in ['my_courses', 'in_progress_courses', 'completed_courses']:
+            return [IsStudent()]
+        else:
+            return [permissions.AllowAny()]
 
     def perform_create(self, serializer):
-        """
-        Assign the currently logged-in user as the instructor when creating a course.
-        """
+        if not IsInstructor().has_permission(self.request, self):
+            raise permissions.PermissionDenied("Only instructors can create courses.")
         serializer.save(instructor=self.request.user)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsInstructor])
+    @action(detail=False, methods=['get'], permission_classes=[IsInstructor()])
     def my_courses(self, request):
-        """
-        Custom action for instructors to view their courses.
-        """
         courses = self.queryset.filter(instructor=request.user)
-        serializer = self.get_serializer(courses, many=True)
-        return Response(serializer.data)
+        return Response(self.get_serializer(courses, many=True).data)
+
+    # Include other actions and methods as necessary
+
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def in_progress_courses(self, request):
@@ -40,8 +42,7 @@ class CourseViewSet(viewsets.ModelViewSet):
             assignments__submissions__student=request.user,
             assignments__submissions__grade__isnull=True
         ).distinct()
-        serializer = self.get_serializer(courses, many=True)
-        return Response(serializer.data)
+        return Response(self.get_serializer(courses, many=True).data)
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def completed_courses(self, request):
@@ -52,8 +53,8 @@ class CourseViewSet(viewsets.ModelViewSet):
             assignments__submissions__student=request.user,
             assignments__submissions__grade__isnull=False
         ).distinct()
-        serializer = self.get_serializer(courses, many=True)
-        return Response(serializer.data)
+        return Response(self.get_serializer(courses, many=True).data)
+
 
 class ModuleViewSet(viewsets.ModelViewSet):
     """
