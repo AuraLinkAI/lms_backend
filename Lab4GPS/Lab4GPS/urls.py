@@ -1,3 +1,4 @@
+# Lab4GPS/urls.py
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -13,9 +14,8 @@ urlpatterns = [
     # Archive app URLs
     path('archive/', include('Archive.urls')),  
 
-    #courses app URLS
+    # Courses app URLs
     path('courses/', include('courses.urls')), 
-
 ]
 
 # Serve media files during development

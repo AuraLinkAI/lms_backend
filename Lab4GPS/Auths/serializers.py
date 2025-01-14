@@ -127,6 +127,11 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ('first_name', 'last_name', 'email', 'username')
 
+        # CHANGED: make username optional here so updates won't fail if omitted
+        extra_kwargs = {
+            'username': {'required': False, 'allow_blank': True},  # <-- ADDED
+        }
+
     def validate_first_name(self, value):
         if not value.strip():
             raise serializers.ValidationError("First name cannot be empty.")

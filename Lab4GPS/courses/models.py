@@ -1,3 +1,4 @@
+# courses/models.py
 from django.db import models
 from django.conf import settings
 
@@ -27,17 +28,17 @@ class Module(models.Model):
 
 class ModuleContent(models.Model):
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='contents')
-    content_type_choices = [
+    CONTENT_TYPE_CHOICES = [
         ('video', 'Video'),
         ('text', 'Text'),
         ('document', 'Document'),
         ('image', 'Image'),
         ('presentation', 'Presentation'),
     ]
-    content_type = models.CharField(max_length=50, choices=content_type_choices)
+    content_type = models.CharField(max_length=50, choices=CONTENT_TYPE_CHOICES)
     content_title = models.CharField(max_length=255)
     text = models.TextField(null=True, blank=True)  # For text content
-    file = models.FileField(upload_to='module_content/', null=True, blank=True)  # For files
+    file = models.FileField(upload_to='module_contents/', null=True, blank=True)  # For files
     video_url = models.URLField(null=True, blank=True)  # For video links
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -67,6 +68,7 @@ class AssignmentSubmission(models.Model):
 
     def __str__(self):
         return f"Submission by {self.student.username} for {self.assignment.title}"
+
 
 class Enrollment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='enrollments')

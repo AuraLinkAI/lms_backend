@@ -1,7 +1,7 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser  # <-- ADDED JSONParser
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
 from .serializers import (
@@ -145,6 +145,7 @@ class UpdateProfileView(generics.UpdateAPIView):
     """
     serializer_class = UpdateProfileSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]  # <-- ADDED: Accept JSON to avoid "Unsupported media type"
 
     def get_object(self):
         return self.request.user

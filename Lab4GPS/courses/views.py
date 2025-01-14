@@ -1,7 +1,12 @@
-from rest_framework import viewsets, permissions
+# courses/views.py
+# courses/views.py
+from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Course, Module, ModuleContent, Assignment, AssignmentSubmission, Enrollment
+from .models import (
+    Course, Module, ModuleContent, 
+    Assignment, AssignmentSubmission, Enrollment
+)
 from .serializers import (
     CourseSerializer, ModuleSerializer, ModuleContentSerializer,
     AssignmentSerializer, AssignmentSubmissionSerializer, EnrollmentSerializer
@@ -21,17 +26,13 @@ class CourseViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
 
     def perform_create(self, serializer):
-        if not IsInstructor().has_permission(self.request, self):
-            raise permissions.PermissionDenied("Only instructors can create courses.")
         serializer.save(instructor=self.request.user)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsInstructor()])
+    @action(detail=False, methods=['get'], permission_classes=[IsInstructor])
     def my_courses(self, request):
         courses = self.queryset.filter(instructor=request.user)
-        return Response(self.get_serializer(courses, many=True).data)
-
-    # Include other actions and methods as necessary
-
+        serializer = self.get_serializer(courses, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def in_progress_courses(self, request):
@@ -42,7 +43,8 @@ class CourseViewSet(viewsets.ModelViewSet):
             assignments__submissions__student=request.user,
             assignments__submissions__grade__isnull=True
         ).distinct()
-        return Response(self.get_serializer(courses, many=True).data)
+        serializer = self.get_serializer(courses, many=True)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def completed_courses(self, request):
@@ -53,22 +55,72 @@ class CourseViewSet(viewsets.ModelViewSet):
             assignments__submissions__student=request.user,
             assignments__submissions__grade__isnull=False
         ).distinct()
-        return Response(self.get_serializer(courses, many=True).data)
+        serializer = self.get_serializer(courses, many=True)
+        return Response(serializer.data)
+
 
 
 class ModuleViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing modules within a course.
     """
-    queryset = Module.objects.all().select_related('course').prefetch_related('contents', 'assignments')
-    serializer_class = ModuleSerializer
     permission_classes = [permissions.IsAuthenticated, IsInstructor | IsAdmin]
+    serializer_class = ModuleSerializer
+
+    def get_queryset(self):
+        """
+        Order modules by 'order' and optionally filter by course.
+        """
+        queryset = Module.objects.select_related('course') \
+                                 .prefetch_related('contents', 'assignments') \
+                                 .order_by('order')
+        course_id = self.kwargs.get('course_pk')
+        if course_id:
+            queryset = queryset.filter(course_id=course_id)
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """
+        Only enrolled users can list modules for a given course.
+        """
+        course_id = self.kwargs.get('course_pk')
+        if course_id:
+            is_enrolled = Enrollment.objects.filter(
+                user=request.user,
+                course_id=course_id,
+                status='active'
+            ).exists()
+            if not is_enrolled:
+                return Response(
+                    {"detail": "You are not enrolled in this course."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Only enrolled users can retrieve a specific module.
+        """
+        module = self.get_object()
+        is_enrolled = Enrollment.objects.filter(
+            user=request.user,
+            course=module.course,
+            status='active'
+        ).exists()
+        if not is_enrolled:
+            return Response(
+                {"detail": "You are not enrolled in this course."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().retrieve(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         """
         Ensure the module is associated with an existing course.
         """
-        serializer.save(course_id=self.kwargs['course_pk'])
+        course_id = self.kwargs.get('course_pk')
+        serializer.save(course_id=course_id)
+
 
 class ModuleContentViewSet(viewsets.ModelViewSet):
     """
@@ -82,7 +134,9 @@ class ModuleContentViewSet(viewsets.ModelViewSet):
         """
         Add content to a specific module.
         """
-        serializer.save(module_id=self.kwargs['module_pk'])
+        module_id = self.kwargs.get('module_pk')
+        serializer.save(module_id=module_id)
+
 
 class AssignmentViewSet(viewsets.ModelViewSet):
     """
@@ -96,7 +150,9 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         """
         Add assignments to a module.
         """
-        serializer.save(module_id=self.kwargs['module_pk'])
+        module_id = self.kwargs.get('module_pk')
+        serializer.save(module_id=module_id)
+
 
 class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
     """
@@ -110,7 +166,8 @@ class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
         """
         Allow students to submit their assignments.
         """
-        serializer.save(student=self.request.user, assignment_id=self.kwargs['assignment_pk'])
+        assignment_id = self.kwargs.get('assignment_pk')
+        serializer.save(student=self.request.user, assignment_id=assignment_id)
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def my_submissions(self, request):
@@ -120,6 +177,7 @@ class AssignmentSubmissionViewSet(viewsets.ModelViewSet):
         submissions = self.queryset.filter(student=request.user)
         serializer = self.get_serializer(submissions, many=True)
         return Response(serializer.data)
+
 
 class EnrollmentViewSet(viewsets.ModelViewSet):
     """
@@ -134,3 +192,5 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         Create an enrollment for the user.
         """
         serializer.save(user=self.request.user)
+
+

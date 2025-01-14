@@ -1,5 +1,6 @@
+# courses/permissions.py
 from rest_framework.permissions import BasePermission
-from Auths.models import CustomUser  # Make sure this import is correct based on your project structure
+from Auths.models import CustomUser  # Ensure this import is correct based on your project structure
 
 class IsInstructor(BasePermission):
     """
@@ -17,7 +18,7 @@ class IsStudent(BasePermission):
 
 class IsAdmin(BasePermission):
     """
-    Allows access only to admins.
+    Allows access only to admin users.
     """
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.is_staff
