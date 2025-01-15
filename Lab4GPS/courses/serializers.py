@@ -2,7 +2,7 @@
 from rest_framework import serializers
 from .models import (
     Course, Module, ModuleContent, 
-    Assignment, AssignmentSubmission, Enrollment
+    Assignment, AssignmentSubmission, Enrollment, ModuleProgress
 )
 
 class ModuleContentSerializer(serializers.ModelSerializer):
@@ -115,3 +115,31 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             user=user, course=course, defaults={'status': 'active'}
         )
         return enrollment
+
+
+class ModuleProgressSerializer(serializers.ModelSerializer):
+    module = serializers.PrimaryKeyRelatedField(queryset=Module.objects.all())
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = ModuleProgress
+        fields = ['id', 'user', 'module', 'progress', 'last_updated']
+        read_only_fields = ['user', 'last_updated']
+
+    def validate_progress(self, value):
+        if not (0 <= value <= 100):
+            raise serializers.ValidationError("Progress must be between 0 and 100.")
+        return value
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        module = validated_data['module']
+        progress, created = ModuleProgress.objects.get_or_create(user=user, module=module)
+        progress.progress = validated_data.get('progress', progress.progress)
+        progress.save()
+        return progress
+
+    def update(self, instance, validated_data):
+        instance.progress = validated_data.get('progress', instance.progress)
+        instance.save()
+        return instance

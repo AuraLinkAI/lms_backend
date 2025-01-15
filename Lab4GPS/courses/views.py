@@ -1,17 +1,19 @@
 # courses/views.py
-# courses/views.py
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import (
     Course, Module, ModuleContent, 
-    Assignment, AssignmentSubmission, Enrollment
+    Assignment, AssignmentSubmission, Enrollment, ModuleProgress
 )
 from .serializers import (
     CourseSerializer, ModuleSerializer, ModuleContentSerializer,
-    AssignmentSerializer, AssignmentSubmissionSerializer, EnrollmentSerializer
+    AssignmentSerializer, AssignmentSubmissionSerializer, EnrollmentSerializer,
+    ModuleProgressSerializer
 )
 from .permissions import IsInstructor, IsStudent, IsAdmin
+from django.shortcuts import get_object_or_404
+
 
 class CourseViewSet(viewsets.ModelViewSet):
     queryset = Course.objects.prefetch_related('modules').select_related('instructor')
@@ -57,7 +59,6 @@ class CourseViewSet(viewsets.ModelViewSet):
         ).distinct()
         serializer = self.get_serializer(courses, many=True)
         return Response(serializer.data)
-
 
 
 class ModuleViewSet(viewsets.ModelViewSet):
@@ -194,3 +195,32 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
+class ModuleProgressViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing user progress in modules.
+    """
+    queryset = ModuleProgress.objects.all().select_related('module', 'user')
+    serializer_class = ModuleProgressSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Users can only see their own module progress.
+        Admins can see all.
+        """
+        if self.request.user.profile.role in ['admin']:
+            return ModuleProgress.objects.all()
+        return ModuleProgress.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        """
+        Ensure that a user can only create/update their own progress.
+        """
+        serializer.save(user=self.request.user)
+
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Allow only updating the 'progress' field.
+        """
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)

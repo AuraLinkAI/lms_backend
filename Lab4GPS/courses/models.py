@@ -78,3 +78,21 @@ class Enrollment(models.Model):
 
     def __str__(self):
         return f'{self.user.username} enrolled in {self.course.title}'
+
+
+class ModuleProgress(models.Model):
+    """
+    Model to track user progress for each module.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='module_progresses')
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='progresses')
+    progress = models.PositiveIntegerField(default=0)  # Progress percentage (0-100)
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'module')
+        verbose_name = 'Module Progress'
+        verbose_name_plural = 'Module Progresses'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.module.title} - {self.progress}%"
