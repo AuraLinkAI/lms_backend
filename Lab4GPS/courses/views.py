@@ -61,66 +61,32 @@ class CourseViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+
 class ModuleViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing modules within a course.
     """
-    permission_classes = [permissions.IsAuthenticated, IsInstructor | IsAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsStudent | IsInstructor | IsAdmin]
     serializer_class = ModuleSerializer
 
     def get_queryset(self):
         """
         Order modules by 'order' and optionally filter by course.
         """
-        queryset = Module.objects.select_related('course') \
-                                 .prefetch_related('contents', 'assignments') \
-                                 .order_by('order')
+        queryset = Module.objects.select_related('course').prefetch_related('contents', 'assignments').order_by('order')
         course_id = self.kwargs.get('course_pk')
         if course_id:
             queryset = queryset.filter(course_id=course_id)
         return queryset
 
-    def list(self, request, *args, **kwargs):
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def detailed_view(self, request, course_pk=None, pk=None):
         """
-        Only enrolled users can list modules for a given course.
+        Retrieve detailed module data including nested contents.
         """
-        course_id = self.kwargs.get('course_pk')
-        if course_id:
-            is_enrolled = Enrollment.objects.filter(
-                user=request.user,
-                course_id=course_id,
-                status='active'
-            ).exists()
-            if not is_enrolled:
-                return Response(
-                    {"detail": "You are not enrolled in this course."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        return super().list(request, *args, **kwargs)
-
-    def retrieve(self, request, *args, **kwargs):
-        """
-        Only enrolled users can retrieve a specific module.
-        """
-        module = self.get_object()
-        is_enrolled = Enrollment.objects.filter(
-            user=request.user,
-            course=module.course,
-            status='active'
-        ).exists()
-        if not is_enrolled:
-            return Response(
-                {"detail": "You are not enrolled in this course."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().retrieve(request, *args, **kwargs)
-
-    def perform_create(self, serializer):
-        """
-        Ensure the module is associated with an existing course.
-        """
-        course_id = self.kwargs.get('course_pk')
-        serializer.save(course_id=course_id)
+        module = get_object_or_404(Module, course_id=course_pk, id=pk)
+        serializer = self.get_serializer(module)
+        return Response(serializer.data)
 
 
 class ModuleContentViewSet(viewsets.ModelViewSet):

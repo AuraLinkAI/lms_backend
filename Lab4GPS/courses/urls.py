@@ -28,7 +28,7 @@ modules_router.register('progress', ModuleProgressViewSet, basename='module-prog
 
 # Include URLs from main and nested routers
 urlpatterns = [
-    path('', include(router.urls)),
-    path('', include(courses_router.urls)),
-    path('', include(modules_router.urls)),
+    path('', include(router.urls)),              # Main router
+    path('', include(courses_router.urls)),     # Nested courses router
+    path('', include(modules_router.urls)),     # Nested modules router
 ]

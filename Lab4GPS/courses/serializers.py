@@ -40,29 +40,26 @@ class AssignmentSerializer(serializers.ModelSerializer):
 
 
 class ModuleSerializer(serializers.ModelSerializer):
-    # Explicitly define 'title' and 'description' as required fields
     title = serializers.CharField(required=True, allow_blank=False)
     description = serializers.CharField(required=True, allow_blank=False)
-    
+
     contents = ModuleContentSerializer(many=True, required=False)
     assignments = AssignmentSerializer(many=True, read_only=True)
     
     class Meta:
         model = Module
         fields = [
-            'id', 'title', 'description', 'order',
-            'contents', 'assignments'
+            'id', 'title', 'description', 'order', 'contents', 
+            'assignments', 'course'
         ]
-        read_only_fields = ['order']  # Make 'order' read-only to manage it in the backend
+        read_only_fields = ['order', 'course']  # Prevent changes to the course once created
 
     def create(self, validated_data):
         contents_data = validated_data.pop('contents', [])
-        # 'order' is read-only; it will be set in the CourseSerializer
         module = Module.objects.create(**validated_data)
         for content_data in contents_data:
             ModuleContent.objects.create(module=module, **content_data)
         return module
-
 
 class CourseSerializer(serializers.ModelSerializer):
     modules = ModuleSerializer(many=True, required=False)  # Make writable
