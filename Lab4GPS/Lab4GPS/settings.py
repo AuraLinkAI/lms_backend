@@ -49,7 +49,8 @@ INSTALLED_APPS = [
     # Your apps
     'Auths',
     'Archive',
-    'courses'
+    'courses',
+    'stamps',
 ]
 
 MIDDLEWARE = [
