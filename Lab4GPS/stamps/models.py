@@ -1,3 +1,4 @@
+# models.py
 from django.db import models
 from django.conf import settings  # Import settings to access the custom user model
 
@@ -30,6 +31,8 @@ class Document(models.Model):
     metadata = models.JSONField(default=dict)  # Store metadata like timestamp, user ID
     stamped = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True)  # Add a timestamp field
+    version = models.CharField(max_length=100, default="1.0")  # Add a version field
 
     def __str__(self):
         return f"Document by {self.user.username}"
