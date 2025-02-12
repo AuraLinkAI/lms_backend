@@ -105,6 +105,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = (
+            'id', 
             'first_name',
             'last_name',
             'email',
@@ -250,3 +251,24 @@ class ResetPasswordSerializer(serializers.Serializer):
             return user
         except CustomUser.DoesNotExist:
             raise serializers.ValidationError("User not found.")
+class AdminUserSerializer(serializers.ModelSerializer):
+    """
+    Allows admins to view, update, or delete a user.
+    'role' is writable here so admins can change it if needed.
+    """
+    class Meta:
+        model = CustomUser
+        # Include any fields you'd like admin to manage:
+        fields = (
+            'id',
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'role',
+            'is_verified',
+            'profile_picture',
+            'is_staff',  # If you want admin to toggle staff
+            'is_superuser',  # Optional, only if your logic requires
+        )
+        read_only_fields = ('id', 'is_superuser')  # Typically don't let admin randomly flip superuser

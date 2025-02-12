@@ -13,7 +13,7 @@ router = DefaultRouter()
 router.register('', CourseViewSet, basename='courses')  # Register at the root of 'courses/'
 router.register('assignments', AssignmentViewSet, basename='assignments')
 router.register('submissions', AssignmentSubmissionViewSet, basename='submissions')
-router.register('enrollments', EnrollmentViewSet, basename='enrollments')
+router.register('enrollments', EnrollmentViewSet, basename='enrollments')  # /courses/enrollments/
 router.register('progress', ModuleProgressViewSet, basename='progress')  # Added for ModuleProgress
 
 # Nested router setup for modules within courses

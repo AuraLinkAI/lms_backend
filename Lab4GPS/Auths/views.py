@@ -1,7 +1,7 @@
-from rest_framework import generics, status
+# auth/views.py
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser  # <-- ADDED JSONParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CustomUser
 from .serializers import (
@@ -15,7 +15,9 @@ from .serializers import (
     ForgotPasswordSerializer,
     VerifyResetOtpSerializer,
     ResetPasswordSerializer,
+    AdminUserSerializer,
 )
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 
 class RegisterView(generics.CreateAPIView):
     """
@@ -26,13 +28,11 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        # Validate request data for first_name and last_name
         if "first_name" not in request.data or "last_name" not in request.data:
             return Response(
                 {"error": "First name and last name are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -131,13 +131,11 @@ class UserProfileView(generics.RetrieveAPIView):
 
     def get(self, request, *args, **kwargs):
         user = self.request.user
-        print(f"First Name: {user.first_name}, Last Name: {user.last_name}, Role: {user.role}")
         serializer = self.get_serializer(user)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def get_object(self):
         return self.request.user
-
 
 class UpdateProfileView(generics.UpdateAPIView):
     """
@@ -145,7 +143,7 @@ class UpdateProfileView(generics.UpdateAPIView):
     """
     serializer_class = UpdateProfileSerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]  # <-- ADDED: Accept JSON to avoid "Unsupported media type"
+    parser_classes = [JSONParser]
 
     def get_object(self):
         return self.request.user
@@ -176,3 +174,28 @@ class ChangePasswordView(generics.GenericAPIView):
             {"message": "Password changed successfully."},
             status=status.HTTP_200_OK,
         )
+
+
+class UserListView(generics.ListAPIView):
+    """
+    API endpoint (admin-only) to list all users.
+    """
+    queryset = CustomUser.objects.all()
+    serializer_class = UserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+# --------------------------------------------------------------
+# NEW: UserDetailView for retrieving/updating/deleting a user (admin-only)
+# --------------------------------------------------------------
+class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    API endpoint (admin-only) to retrieve, update or delete a single user by ID.
+    """
+    queryset = CustomUser.objects.all()
+    serializer_class = AdminUserSerializer
+    permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+
+    # If you want partial updates (PATCH) to be allowed
+    # you can rely on DRF's default partial_update or override
+    # def patch(self, request, *args, **kwargs):
+    #    return self.partial_update(request, *args, **kwargs)
