@@ -2,13 +2,11 @@
 from rest_framework import serializers
 from .models import (
     Course, Module, ModuleContent, 
-    Assignment, AssignmentSubmission, Enrollment, ModuleProgress
+    Assignment, AssignmentSubmission, Enrollment, ModuleProgress, Wishlist
 )
 
 class ModuleContentSerializer(serializers.ModelSerializer):
-    file = serializers.FileField(
-        max_length=None, use_url=True, allow_null=True, required=False
-    )
+    file = serializers.FileField(max_length=None, use_url=True, allow_null=True, required=False)
     
     class Meta:
         model = ModuleContent
@@ -42,9 +40,7 @@ class AssignmentSerializer(serializers.ModelSerializer):
 class ModuleSerializer(serializers.ModelSerializer):
     title = serializers.CharField(required=True, allow_blank=False)
     description = serializers.CharField(required=True, allow_blank=False)
-
     contents = ModuleContentSerializer(many=True, required=False)
-    assignments = AssignmentSerializer(many=True, read_only=True)
     
     class Meta:
         model = Module
@@ -52,7 +48,7 @@ class ModuleSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'order', 'contents', 
             'assignments', 'course'
         ]
-        read_only_fields = ['order', 'course']  # Prevent changes to the course once created
+        read_only_fields = ['order', 'course']
 
     def create(self, validated_data):
         contents_data = validated_data.pop('contents', [])
@@ -62,7 +58,8 @@ class ModuleSerializer(serializers.ModelSerializer):
         return module
 
 class CourseSerializer(serializers.ModelSerializer):
-    modules = ModuleSerializer(many=True, required=False)  # Make writable
+    # modules is writable via the nested serializer
+    modules = ModuleSerializer(many=True, required=False)
     
     class Meta:
         model = Course
@@ -73,14 +70,21 @@ class CourseSerializer(serializers.ModelSerializer):
         read_only_fields = ['instructor', 'created_at']
 
     def create(self, validated_data):
+        # Attempt to get modules data.
         modules_data = validated_data.pop('modules', [])
+        # If modules_data is a JSON string (from FormData), parse it.
+        if isinstance(modules_data, str):
+            try:
+                modules_data = json.loads(modules_data)
+            except Exception as e:
+                raise serializers.ValidationError({"modules": "Invalid JSON format for modules data."})
         course = Course.objects.create(**validated_data)
         for index, module_data in enumerate(modules_data):
-            # Assign 'order' based on the sequence of modules
+            # Optionally, set the module order
             Module.objects.create(course=course, order=index, **module_data)
         return course
 
-
+        
 class AssignmentSubmissionSerializer(serializers.ModelSerializer):
     file = serializers.FileField(
         max_length=None, use_url=True, allow_null=True, required=False
@@ -140,3 +144,18 @@ class ModuleProgressSerializer(serializers.ModelSerializer):
         instance.progress = validated_data.get('progress', instance.progress)
         instance.save()
         return instance
+
+# courses/serializers.py
+from rest_framework import serializers
+from .models import Course, Wishlist
+# Assume CourseSerializer already exists
+
+class WishlistSerializer(serializers.ModelSerializer):
+    course = CourseSerializer(read_only=True)
+    course_id = serializers.PrimaryKeyRelatedField(
+        queryset=Course.objects.all(), source='course', write_only=True
+    )
+
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'course', 'course_id', 'added_at']
