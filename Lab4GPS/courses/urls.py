@@ -10,7 +10,6 @@ router.register('assignments', views.AssignmentViewSet, basename='assignments')
 router.register('submissions', views.AssignmentSubmissionViewSet, basename='submissions')
 router.register('enrollments', views.EnrollmentViewSet, basename='enrollments')
 router.register('progress', views.ModuleProgressViewSet, basename='progress')
-router.register('wishlist', views.WishlistViewSet, basename='wishlist')
 
 # Nested router for modules within courses
 courses_router = nested_routers.NestedSimpleRouter(router, '', lookup='course')

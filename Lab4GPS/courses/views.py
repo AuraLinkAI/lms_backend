@@ -4,12 +4,12 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from .models import (
     Course, Module, ModuleContent, 
-    Assignment, AssignmentSubmission, Enrollment, ModuleProgress, Wishlist
+    Assignment, AssignmentSubmission, Enrollment, ModuleProgress,
 )
 from .serializers import (
     CourseSerializer, ModuleSerializer, ModuleContentSerializer,
     AssignmentSerializer, AssignmentSubmissionSerializer, EnrollmentSerializer,
-    ModuleProgressSerializer, WishlistSerializer
+    ModuleProgressSerializer,
 )
 from .permissions import IsInstructor, IsStudent, IsAdmin
 
@@ -217,12 +217,3 @@ def menu_help(request):
     ]
     return Response(data)
 
-class WishlistViewSet(viewsets.ModelViewSet):
-    serializer_class = WishlistSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Wishlist.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
