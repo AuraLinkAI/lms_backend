@@ -1,6 +1,11 @@
+# menu/urls.py or wishlist/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import WishlistViewSet, admin_dashboard, instructor_analytics, student_analytics, menu_settings, menu_notifications, menu_help
+from .views import (
+    WishlistViewSet,
+    admin_dashboard, instructor_analytics, student_analytics,
+    menu_settings, menu_notifications, menu_help
+)
 
 router = DefaultRouter()
 router.register("wishlist", WishlistViewSet, basename="wishlist")

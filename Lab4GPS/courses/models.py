@@ -37,7 +37,7 @@ class ModuleContent(models.Model):
     ]
     content_type = models.CharField(max_length=50, choices=CONTENT_TYPE_CHOICES)
     content_title = models.CharField(max_length=255)
-    text = models.TextField(null=True, blank=True)  # For text content
+    text = models.TextField(null=True, blank=True)   # For text content
     file = models.FileField(upload_to='module_contents/', null=True, blank=True)  # For files
     video_url = models.URLField(null=True, blank=True)  # For video links
     created_at = models.DateTimeField(auto_now_add=True)
@@ -74,7 +74,9 @@ class Enrollment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='enrollments')
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
     enrolled_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=20, default='active')
+
+    # Change default to 'in-progress' so as soon as we create an enrollment, it's in progress
+    status = models.CharField(max_length=20, default='in-progress')
 
     def __str__(self):
         return f'{self.user.username} enrolled in {self.course.title}'
@@ -96,5 +98,3 @@ class ModuleProgress(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.module.title} - {self.progress}%"
-
-

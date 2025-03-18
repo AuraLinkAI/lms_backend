@@ -16,6 +16,9 @@ urlpatterns = [
 
     # Courses app URLs
     path('courses/', include('courses.urls')), 
+
+    path('menu/', include('menu.urls')), 
+
 ]
 
 # Serve media files during development
