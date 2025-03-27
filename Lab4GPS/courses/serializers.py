@@ -1,38 +1,62 @@
 # courses/serializers.py
-
 from rest_framework import serializers
 import json
 from .models import (
-    Course, Module, ModuleContent,
-    Assignment, AssignmentSubmission, Enrollment, ModuleProgress,
+    Course, Module, Chapter, ChapterContent,
+    Assignment, AssignmentSubmission, Enrollment, ModuleProgress
 )
 
-class ModuleContentSerializer(serializers.ModelSerializer):
-    file = serializers.FileField(max_length=None, use_url=True, allow_null=True, required=False)
+class ChapterContentSerializer(serializers.ModelSerializer):
+    file = serializers.FileField(
+        max_length=None,
+        use_url=True,
+        allow_null=True,
+        required=False
+    )
 
     class Meta:
-        model = ModuleContent
-        fields = [
-            'id', 'content_type', 'content_title',
-            'text', 'file', 'video_url', 'created_at'
-        ]
-        read_only_fields = ['module', 'created_at']
+        model = ChapterContent
+        fields = ['id', 'content_type', 'content_title',
+                  'text', 'file', 'video_url', 'created_at']
+        read_only_fields = ['chapter', 'created_at']
 
     def validate(self, data):
-        content_type = data.get('content_type')
-        if content_type == 'text' and not data.get('text'):
+        ctype = data.get('content_type')
+        if ctype == 'text' and not data.get('text'):
             raise serializers.ValidationError("Text content requires 'text' field.")
-        if content_type == 'video' and not data.get('video_url'):
-            raise serializers.ValidationError("Video content requires 'video_url' field.")
-        if content_type in ['document', 'image', 'presentation'] and not data.get('file'):
-            raise serializers.ValidationError(
-                f"{content_type.capitalize()} content requires a 'file' field."
-            )
+        if ctype == 'video':
+            # They can either provide a video_url or upload a file
+            file_obj = data.get('file')
+            video_url = data.get('video_url')
+            if not file_obj and not video_url:
+                raise serializers.ValidationError("Video content requires either 'video_url' or 'file'.")
+        if ctype in ['document','image','presentation'] and not data.get('file'):
+            raise serializers.ValidationError(f"{ctype.capitalize()} content requires a file.")
         return data
 
 
+class ChapterSerializer(serializers.ModelSerializer):
+    contents = ChapterContentSerializer(many=True, required=False)
+
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'order', 'contents']
+
+    def create(self, validated_data):
+        contents_data = validated_data.pop('contents', [])
+        chapter = Chapter.objects.create(**validated_data)
+        for content_data in contents_data:
+            ChapterContent.objects.create(chapter=chapter, **content_data)
+        return chapter
+
+
 class AssignmentSerializer(serializers.ModelSerializer):
-    file = serializers.FileField(max_length=None, use_url=True, allow_null=True, required=False)
+    file = serializers.FileField(
+        max_length=None, 
+        use_url=True, 
+        allow_null=True, 
+        required=False
+    )
 
     class Meta:
         model = Assignment
@@ -40,77 +64,87 @@ class AssignmentSerializer(serializers.ModelSerializer):
 
 
 class ModuleSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(required=True, allow_blank=False)
-    description = serializers.CharField(required=True, allow_blank=False)
-    contents = ModuleContentSerializer(many=True, required=False)
+    chapters = ChapterSerializer(many=True, required=False)
 
     class Meta:
         model = Module
-        fields = [
-            'id', 'title', 'description', 'order', 'contents',
-            'assignments', 'course'
-        ]
+        fields = ['id', 'title', 'description', 'order', 'chapters', 'course']
         read_only_fields = ['order', 'course']
 
     def create(self, validated_data):
-        contents_data = validated_data.pop('contents', [])
+        chapters_data = validated_data.pop('chapters', [])
         module = Module.objects.create(**validated_data)
-        for content_data in contents_data:
-            ModuleContent.objects.create(module=module, **content_data)
+        for index, ch_data in enumerate(chapters_data):
+            contents_data = ch_data.pop('contents', [])
+            ch = Chapter.objects.create(module=module, order=index, **ch_data)
+            for c_data in contents_data:
+                ChapterContent.objects.create(chapter=ch, **c_data)
         return module
 
 
 class CourseSerializer(serializers.ModelSerializer):
     modules = ModuleSerializer(many=True, required=False)
-    # >>> Define is_enrolled as a SerializerMethodField <<<
     is_enrolled = serializers.SerializerMethodField()
 
     class Meta:
         model = Course
         fields = [
             'id', 'title', 'description', 'cover_image',
-            'instructor', 'modules', 'created_at',
-            'is_enrolled',  # Must appear here so DRF knows it's part of the output
+            'instructor', 'modules', 'created_at', 'is_enrolled',
         ]
         read_only_fields = ['instructor', 'created_at', 'is_enrolled']
 
     def get_is_enrolled(self, obj):
-        """
-        Return True if the request.user is enrolled in this course; else False.
-        """
-        user = self.context["request"].user
+        user = self.context['request'].user
         if not user.is_authenticated:
             return False
         return Enrollment.objects.filter(user=user, course=obj).exists()
 
     def create(self, validated_data):
         request = self.context.get('request')
-        modules_data = request.data.get('modules')  # Possibly coming from JSON
-
-        if isinstance(modules_data, str):
+        modules_data_str = request.data.get('modules', None)
+        if modules_data_str:
             try:
-                modules_data = json.loads(modules_data)  # Convert string to list
+                modules_data = json.loads(modules_data_str)
             except json.JSONDecodeError:
-                raise serializers.ValidationError(
-                    {"modules": "Invalid JSON format for modules data."}
-                )
+                raise serializers.ValidationError({"modules": "Invalid JSON format."})
+        else:
+            modules_data = []
 
         course = Course.objects.create(**validated_data)
 
-        # Create modules if provided
-        for index, module_data in enumerate(modules_data or []):
-            contents_data = module_data.pop('contents', [])
-            module = Module.objects.create(
-                course=course, order=index, **module_data
-            )
-            for content_data in contents_data:
-                ModuleContent.objects.create(module=module, **content_data)
+        # Create modules in the order
+        for index, mod_data in enumerate(modules_data):
+            chapters_data = mod_data.pop('chapters', [])
+            module = Module.objects.create(course=course, order=index, **mod_data)
+            for ch_index, ch_data in enumerate(chapters_data):
+                contents_data = ch_data.pop('contents', [])
+                chapter = Chapter.objects.create(module=module, order=ch_index, **ch_data)
+                for cnt_data in contents_data:
+                    file_field_key = cnt_data.get('fileFieldKey')
+                    uploaded_file = None
+                    if file_field_key and file_field_key in request.FILES:
+                        uploaded_file = request.FILES[file_field_key]
+
+                    ChapterContent.objects.create(
+                        chapter=chapter,
+                        content_type=cnt_data.get('content_type'),
+                        content_title=cnt_data.get('content_title'),
+                        text=cnt_data.get('text',''),
+                        file=uploaded_file,
+                        video_url=cnt_data.get('video_url') or cnt_data.get('link',''),
+                    )
 
         return course
 
 
 class AssignmentSubmissionSerializer(serializers.ModelSerializer):
-    file = serializers.FileField(max_length=None, use_url=True, allow_null=True, required=False)
+    file = serializers.FileField(
+        max_length=None, 
+        use_url=True, 
+        allow_null=True, 
+        required=False
+    )
 
     class Meta:
         model = AssignmentSubmission

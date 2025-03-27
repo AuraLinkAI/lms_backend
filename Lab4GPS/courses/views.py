@@ -1,25 +1,33 @@
 # courses/views.py
 
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+
 from .models import (
-    Course, Module, ModuleContent,
+    Course, Module, Chapter, ChapterContent,
     Assignment, AssignmentSubmission, Enrollment, ModuleProgress,
 )
 from .serializers import (
-    CourseSerializer, ModuleSerializer, ModuleContentSerializer,
+    CourseSerializer, ModuleSerializer, ChapterSerializer, ChapterContentSerializer,
     AssignmentSerializer, AssignmentSubmissionSerializer, EnrollmentSerializer,
     ModuleProgressSerializer,
 )
 from .permissions import IsInstructorOrAdmin, IsStudent, IsAdmin
+
 
 class CourseViewSet(viewsets.ModelViewSet):
     queryset = Course.objects.prefetch_related('modules').select_related('instructor')
     serializer_class = CourseSerializer
 
     def get_permissions(self):
+        """
+        Make sure instructors/admin can create/update;
+        my_courses => instructor or admin,
+        in_progress or completed => student,
+        else => allow any.
+        """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsInstructorOrAdmin()]
         elif self.action == 'my_courses':
@@ -30,7 +38,6 @@ class CourseViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
 
     def get_serializer_context(self):
-        """ So the serializer can see request.user for is_enrolled """
         return {"request": self.request}
 
     def perform_create(self, serializer):
@@ -45,7 +52,6 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def in_progress_courses(self, request):
-        """All courses where user has an Enrollment with status='in-progress'."""
         enrollments = Enrollment.objects.filter(user=request.user, status='in-progress')
         course_ids = enrollments.values_list('course_id', flat=True)
         courses = self.queryset.filter(id__in=course_ids)
@@ -54,53 +60,64 @@ class CourseViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[IsStudent])
     def completed_courses(self, request):
-        """All courses where user has an Enrollment with status='completed'."""
         enrollments = Enrollment.objects.filter(user=request.user, status='completed')
         course_ids = enrollments.values_list('course_id', flat=True)
         courses = self.queryset.filter(id__in=course_ids)
         serializer = self.get_serializer(courses, many=True)
         return Response(serializer.data)
-
-
 class ModuleViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsStudent | IsInstructorOrAdmin]
     serializer_class = ModuleSerializer
 
     def get_queryset(self):
-        """
-        If a student is retrieving modules for a course, automatically create 
-        or update their enrollment status to in-progress (if not already enrolled).
-        """
-        queryset = Module.objects.select_related('course').prefetch_related('contents', 'assignments').order_by('order')
+        print("DEBUG: Entered ModuleViewSet.get_queryset() for user:", self.request.user)
+        queryset = Module.objects.select_related('course').order_by('order')
         course_id = self.kwargs.get('course_pk')
+
         if course_id:
             queryset = queryset.filter(course_id=course_id)
 
-            # Auto-enroll the user if they're a student and have no enrollment for this course.
-            if self.request.user.is_authenticated and hasattr(self.request.user, 'profile'):
-                # Example check if user is a "student". You can adapt if you track roles differently.
-                # If you want everyone except admin/instructor to auto-enroll, you can do it unconditionally:
-                user_profile = self.request.user.profile
-                if user_profile.role == 'student':
-                    Enrollment.objects.get_or_create(
-                        user=self.request.user,
-                        course_id=course_id,
-                        defaults={'status': 'in-progress'}
+            # AUTO-ENROLL logic
+            if (self.request.user.is_authenticated 
+                and hasattr(self.request.user, 'profile') 
+                and self.request.user.profile.role == 'student'):
+                
+                enrollment, created = Enrollment.objects.get_or_create(
+                    user=self.request.user,
+                    course_id=course_id,
+                    defaults={'status': 'in-progress'}
+                )
+                
+                if created:
+                    print(
+                        f"DEBUG: Created new enrollment for user={self.request.user} in course_id={course_id}"
                     )
+                else:
+                    print(
+                        f"DEBUG: Enrollment already exists for user={self.request.user} in course_id={course_id}"
+                    )
+
         return queryset
 
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def detailed_view(self, request, course_pk=None, pk=None):
-        """Example custom detail route for a module."""
         module = get_object_or_404(Module, course_id=course_pk, id=pk)
         serializer = self.get_serializer(module)
         return Response(serializer.data)
 
 
-class ModuleContentViewSet(viewsets.ModelViewSet):
-    queryset = ModuleContent.objects.all().select_related('module')
-    serializer_class = ModuleContentSerializer
+class ChapterViewSet(viewsets.ModelViewSet):
+    queryset = Chapter.objects.all()
+    serializer_class = ChapterSerializer
     permission_classes = [permissions.IsAuthenticated, IsInstructorOrAdmin]
+
+    def get_queryset(self):
+        # Filter by module if in nested route
+        module_id = self.kwargs.get('module_pk')
+        qs = super().get_queryset()
+        if module_id:
+            qs = qs.filter(module_id=module_id)
+        return qs
 
     def perform_create(self, serializer):
         module_id = self.kwargs.get('module_pk')
@@ -139,18 +156,10 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        """
-        When someone manually enrolls, set their status to 'in-progress'.
-        This is enforced by the default in the serializer/model as well.
-        """
         serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['post'], permission_classes=[IsStudent])
     def mark_completed(self, request, pk=None):
-        """
-        Example custom action to mark an existing enrollment as 'completed'.
-        e.g., call POST /enrollments/{id}/mark_completed/ when user finishes the course
-        """
         enrollment = get_object_or_404(Enrollment, pk=pk, user=request.user)
         enrollment.status = 'completed'
         enrollment.save()
@@ -159,82 +168,90 @@ class EnrollmentViewSet(viewsets.ModelViewSet):
 
 class ModuleProgressViewSet(viewsets.ModelViewSet):
     queryset = ModuleProgress.objects.all().select_related('module', 'user')
+
+    # Ensure DRF knows which serializer to use
     serializer_class = ModuleProgressSerializer
+
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Example: admin can see all, others see only their own
-        if hasattr(self.request.user, 'profile') and self.request.user.profile.role == 'admin':
+        """
+        Admins see all progress; everyone else sees only their own.
+        """
+        user = self.request.user
+        if hasattr(user, 'profile') and user.profile.role == 'admin':
             return ModuleProgress.objects.all()
-        return ModuleProgress.objects.filter(user=self.request.user)
+        return ModuleProgress.objects.filter(user=user)
 
     def perform_create(self, serializer):
+        # Attach to current user on create
         serializer.save(user=self.request.user)
 
     def partial_update(self, request, *args, **kwargs):
         kwargs['partial'] = True
         return self.update(request, *args, **kwargs)
 
+    # ---------------------------------------
+    # CUSTOM PATCH: /courses/<course_pk>/modules/<module_pk>/progress/
+    # This "upserts" progress if no record, otherwise updates existing
+    # ---------------------------------------
+    @action(
+        detail=False,
+        methods=['patch'],
+        url_path='',
+        permission_classes=[permissions.IsAuthenticated]
+    )
+    def patch_progress(self, request, course_pk=None, module_pk=None):
+        """
+        PATCH /courses/<course_pk>/modules/<module_pk>/progress/
+        Body: { "progress": 0..100 }
 
-@api_view(['GET'])
-def admin_dashboard(request):
-    data = {
-        "totalUsers": 150,
-        "activeUsers": 120,
-        "pendingRequests": 5,
-        "revenue": 5000,
-    }
-    return Response(data)
+        1) get_or_create user’s ModuleProgress record.
+        2) Update with the given progress.
+        3) Check if ALL modules in the course are at 100% => mark the Enrollment as completed.
+        """
+        progress_val = request.data.get('progress')
+        if progress_val is None:
+            return Response({"detail": "Missing 'progress' field"}, status=400)
 
+        # Validate it's an integer 0 <= progress <= 100
+        try:
+            progress_val = int(progress_val)
+        except ValueError:
+            return Response({"detail": "progress must be an integer"}, status=400)
 
-@api_view(['GET'])
-def instructor_analytics(request):
-    data = {
-        "totalCourses": 10,
-        "totalStudents": 200,
-        "averageRating": 4.5,
-    }
-    return Response(data)
+        if progress_val < 0 or progress_val > 100:
+            return Response({"detail": "progress must be between 0 and 100"}, status=400)
 
+        # Confirm the module belongs to that course
+        module = get_object_or_404(Module, pk=module_pk, course__pk=course_pk)
 
-@api_view(['GET'])
-def student_analytics(request):
-    data = {
-        "coursesEnrolled": 5,
-        "completedCourses": 3,
-        "progressPercentage": 70,
-    }
-    return Response(data)
+        # Upsert the ModuleProgress
+        module_progress, created = ModuleProgress.objects.get_or_create(
+            user=request.user,
+            module=module
+        )
+        module_progress.progress = progress_val
+        module_progress.save()
 
+        # ---------------------------------------------
+        # Check if user now has 100% in ALL modules of this course
+        # ---------------------------------------------
+        total_modules = Module.objects.filter(course=module.course).count()
+        completed_modules = ModuleProgress.objects.filter(
+            user=request.user,
+            module__course=module.course,
+            progress=100
+        ).count()
 
-@api_view(['GET', 'POST'])
-def menu_settings(request):
-    dummy_settings = {"theme": "light", "notifications": True, "language": "en"}
-    if request.method == 'GET':
-        return Response(dummy_settings)
-    elif request.method == 'POST':
-        new_settings = request.data
-        return Response({
-            "message": "Settings updated successfully",
-            "settings": new_settings
-        })
+        if total_modules > 0 and completed_modules == total_modules:
+            # Mark user’s enrollment as completed (if it exists)
+            enrollment_qs = Enrollment.objects.filter(user=request.user, course=module.course)
+            if enrollment_qs.exists():
+                enrollment = enrollment_qs.first()
+                enrollment.status = 'completed'
+                enrollment.save()
 
-
-@api_view(['GET'])
-def menu_notifications(request):
-    data = [
-        {"id": 1, "message": "System maintenance scheduled for tonight at 11 PM."},
-        {"id": 2, "message": "New course materials available for your enrolled courses."},
-        {"id": 3, "message": "Your profile has been updated successfully."},
-    ]
-    return Response(data)
-
-
-@api_view(['GET'])
-def menu_help(request):
-    data = [
-        {"id": 1, "title": "How to navigate the platform", "content": "Use the menu to access different features."},
-        {"id": 2, "title": "Troubleshooting common issues", "content": "Clear cache and restart your browser."},
-        {"id": 3, "title": "Contact support", "content": "Email support@example.com for further assistance."},
-    ]
-    return Response(data)
+        # Return updated progress
+        serializer = self.get_serializer(module_progress)
+        return Response(serializer.data, status=200)

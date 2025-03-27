@@ -15,19 +15,30 @@ class Course(models.Model):
     def __str__(self):
         return self.title
 
-
 class Module(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='modules')
-    order = models.PositiveIntegerField(default=0)  # To maintain module order
+    order = models.PositiveIntegerField(default=0)  # order of modules in the course
 
     def __str__(self):
         return f"{self.title} - {self.course.title}"
 
+##########################################################
+# NEW: Chapter & ChapterContent, nested under Module
+##########################################################
+class Chapter(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='chapters')
+    title = models.CharField(max_length=255)
+    order = models.PositiveIntegerField(default=0)  # order of chapters in the module
 
-class ModuleContent(models.Model):
-    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='contents')
+    def __str__(self):
+        return f"{self.title} (Module: {self.module.title})"
+
+
+class ChapterContent(models.Model):
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, related_name='contents')
+
     CONTENT_TYPE_CHOICES = [
         ('video', 'Video'),
         ('text', 'Text'),
@@ -37,13 +48,13 @@ class ModuleContent(models.Model):
     ]
     content_type = models.CharField(max_length=50, choices=CONTENT_TYPE_CHOICES)
     content_title = models.CharField(max_length=255)
-    text = models.TextField(null=True, blank=True)   # For text content
-    file = models.FileField(upload_to='module_contents/', null=True, blank=True)  # For files
-    video_url = models.URLField(null=True, blank=True)  # For video links
+    text = models.TextField(null=True, blank=True)
+    file = models.FileField(upload_to='chapter_contents/', null=True, blank=True)
+    video_url = models.URLField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.content_type}: {self.content_title}"
+        return f"{self.content_type}: {self.content_title} (Ch: {self.chapter.title})"
 
 
 class Assignment(models.Model):
@@ -51,7 +62,7 @@ class Assignment(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
     due_date = models.DateField(null=True, blank=True)
-    file = models.FileField(upload_to='assignments/', null=True, blank=True)  # Assignment resources
+    file = models.FileField(upload_to='assignments/', null=True, blank=True)
     max_score = models.PositiveIntegerField(default=100)
 
     def __str__(self):
@@ -61,10 +72,10 @@ class Assignment(models.Model):
 class AssignmentSubmission(models.Model):
     assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
     student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    file = models.FileField(upload_to='submissions/', null=True, blank=True)  # Submitted file
-    text = models.TextField(null=True, blank=True)  # Submitted text
+    file = models.FileField(upload_to='submissions/', null=True, blank=True)
+    text = models.TextField(null=True, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
-    grade = models.PositiveIntegerField(null=True, blank=True)  # Graded score
+    grade = models.PositiveIntegerField(null=True, blank=True)
 
     def __str__(self):
         return f"Submission by {self.student.username} for {self.assignment.title}"
@@ -74,8 +85,6 @@ class Enrollment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='enrollments')
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
     enrolled_at = models.DateTimeField(auto_now_add=True)
-
-    # Change default to 'in-progress' so as soon as we create an enrollment, it's in progress
     status = models.CharField(max_length=20, default='in-progress')
 
     def __str__(self):
@@ -83,12 +92,9 @@ class Enrollment(models.Model):
 
 
 class ModuleProgress(models.Model):
-    """
-    Model to track user progress for each module.
-    """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='module_progresses')
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name='progresses')
-    progress = models.PositiveIntegerField(default=0)  # Progress percentage (0-100)
+    progress = models.PositiveIntegerField(default=0)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:

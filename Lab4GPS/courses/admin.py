@@ -1,6 +1,9 @@
+# courses/admin.py
 from django.contrib import admin
-from .models import Course, Module, ModuleContent, Assignment, AssignmentSubmission
-
+from .models import (
+    Course, Module, Chapter, ChapterContent,
+    Assignment, AssignmentSubmission
+)
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
@@ -10,25 +13,30 @@ class CourseAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
 
 
-class ModuleInline(admin.TabularInline):
-    model = Module
-    extra = 1  # Allows adding modules directly in the course admin
-
-
 @admin.register(Module)
 class ModuleAdmin(admin.ModelAdmin):
     list_display = ('title', 'course', 'order')
     search_fields = ('title', 'course__title')
     list_filter = ('course',)
     ordering = ('course', 'order')
-    inlines = []  # No inline for now, but can be added for nested contents
 
 
-@admin.register(ModuleContent)
-class ModuleContentAdmin(admin.ModelAdmin):
-    list_display = ('content_title', 'content_type', 'module', 'created_at')
-    search_fields = ('content_title', 'module__title')
-    list_filter = ('content_type', 'module', 'created_at')
+##########################################################
+# Register new Chapter and ChapterContent
+##########################################################
+@admin.register(Chapter)
+class ChapterAdmin(admin.ModelAdmin):
+    list_display = ('title', 'module', 'order')
+    search_fields = ('title', 'module__title')
+    list_filter = ('module',)
+    ordering = ('module', 'order')
+
+
+@admin.register(ChapterContent)
+class ChapterContentAdmin(admin.ModelAdmin):
+    list_display = ('content_title', 'content_type', 'chapter', 'created_at')
+    search_fields = ('content_title', 'chapter__title')
+    list_filter = ('content_type', 'chapter', 'created_at')
     ordering = ('-created_at',)
 
 
