@@ -27,3 +27,7 @@ urlpatterns = [
     path('', include(courses_router.urls)),
     path('', include(modules_router.urls)),
 ]
+
+
+
+
