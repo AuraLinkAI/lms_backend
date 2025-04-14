@@ -17,7 +17,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'su^4c*9yjoemujjkn3k%ekv2@$#18seu$9(02&4(1)
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 # Allowed hosts from env variables
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.vercel.app', '.now.sh']
 
 # Application definition
 INSTALLED_APPS = [
@@ -76,11 +76,11 @@ WSGI_APPLICATION = 'Lab4GPS.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+        'NAME': os.getenv('DB_NAME', 'postgres'),  # The database name
+        'USER': os.getenv('DB_USER', 'postgres.kpbvjtsadszhmlorurov'),  # The user from Supabase
+        'PASSWORD': os.getenv('DB_PASSWORD', 'SmmjSarenie@1234'),  # Password stored in environment variable
+        'HOST': os.getenv('DB_HOST', 'aws-0-eu-west-1.pooler.supabase.com'),  # The host from Supabase
+        'PORT': os.getenv('DB_PORT', '6543'),  # The port from Supabase
     }
 }
 
@@ -144,6 +144,23 @@ DEFAULT_FROM_EMAIL = 'SomaNet <{}>'.format(EMAIL_HOST_USER)
 # CORS setup
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://1af8-102-213-251-138.ngrok-free.app",
-    "https://lab4gps-platform.vercel.app",
+    "https://matakiri-lms-vercel.vercel.app"
 ]
+
+# Static files handling (Whitenoise)
+INSTALLED_APPS += [
+    'whitenoise.runserver_nostatic',
+]
+
+MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Security Settings
+SECURE_SSL_REDIRECT = True
+SECURE_HSTS_SECONDS = 3600
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
+X_FRAME_OPTIONS = 'DENY'

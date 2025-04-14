@@ -1,15 +1,23 @@
 {
+    "version": 2,
     "builds": [
       {
-        "src": "api/index.py",
-        "use": "@vercel/python"
+        "src": "Lab4GPS/wsgi.py", 
+        "use": "@vercel/python", 
+        "config": { 
+          "maxLambdaSize": "100mb",  
+          "runtime": "python3.9" 
+        }
       }
     ],
     "routes": [
       {
+        "src": "/static/(.*)",
+        "dest": "/static/$1"
+      },
+      {
         "src": "/(.*)",
-        "dest": "api/index.py"
+        "dest": "Lab4GPS/wsgi.py"
       }
     ]
   }
-  
