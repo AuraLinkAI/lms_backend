@@ -1,0 +1,15 @@
+{
+    "builds": [
+      {
+        "src": "Lab4GPS/wsgi.py",
+        "use": "@vercel/python"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "Lab4GPS/wsgi.py"
+      }
+    ]
+  }
+  

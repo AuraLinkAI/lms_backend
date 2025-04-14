@@ -1,0 +1,4 @@
+.env
+*.sqlite3
+media/
+collected_static/
