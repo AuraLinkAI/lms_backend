@@ -1,14 +1,14 @@
 {
     "builds": [
       {
-        "src": "Lab4GPS/Lab4GPS/wsgi.py",
+        "src": "api/index.py",
         "use": "@vercel/python"
       }
     ],
     "routes": [
       {
         "src": "/(.*)",
-        "dest": "Lab4GPS/Lab4GPS/wsgi.py"
+        "dest": "api/index.py"
       }
     ]
   }
